@@ -51,4 +51,4 @@ This project provides a robust, cleaned dataset and initial findings that lay th
 ## 📁 Repository Structure
 
 * `Chicago_Crime.pdf`: The full project report detailing the methodology, analysis, and findings. **(Highly Recommended to view first!)**
-* `Ololade_Akinsanola_Project_Phase3qmd.qmd`: **R/Quarto source code file** containing all data cleaning, transformation, analysis, and visualization code.
+* `Chicago_Crime.qmd`: **R/Quarto source code file** containing all data cleaning, transformation, analysis, and visualization code.
