@@ -1,0 +1,576 @@
+---
+title: "Ololade_Akinsanola_Project_Phase2"
+format: 
+  html:
+    self-contained: true
+    embed-resources: true
+editor: visual
+execute: 
+  echo: true
+  include: true
+---
+
+## Project Proposal
+
+I obtained my data sets from Chicago City Data Portal, and I working on the following two (2) data sets for my project:
+
+-   Covid-19 by zipcode weekly (from 2020 to 2024)
+
+    -   <https://data.cityofchicago.org/Health-Human-Services/COVID-19-Cases-Tests-and-Deaths-by-ZIP-Code-Histor/yhhz-zm2v/about_data>
+
+-   Crimes Records (from 2020 to 2024)
+
+    -   <https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-Present/ijzp-q8t2/about_data>
+
+## Questions of interest
+
+-   Is there a correlation between COVID-19 cases rate and the crime rates?
+
+-   How did crime rates vary by community area during the COVID-19 period?
+
+-   How did crime rates change from 2019 to 2020-2022 (COVID-19 era)?
+
+-   Did certain areas experience more severe COVID-19 impacts (in terms of positivity rate and deaths)?
+
+-   What is the relationship between population size and crime rates during COVID-19?
+
+-   How did testing rates correlate with COVID-19 case rates across zip codes?
+
+-   How did weekly testing and positivity rates compare across different years (2020-2022)?
+
+### **Data**
+
+-   In the COVID-19 by zip code daily cases data set, there are 13,132 observations and 21 variables.
+
+-   In the crime data set, there are 1,026,454 observations and 22 variables.
+
+-   I added a new file (which i created myself) to show the 77 community areas in Chicago, their names and their websites. Then I aggregated the data sets by location, weekly and filtered it from 2020 - 2022, using the baseline for comparison as 2019. Then I left joined the data sets together on Zip code.
+
+### Data Processing and Cleaning
+
+```{r}
+# filter both zipcode and crime data and sort by week (2020 - 2023)
+library(tidyverse)
+library(lubridate)
+
+covid <- read.csv("data/covid19_zipcode.csv")
+commu_zip <- read.csv("data/zip_comm.csv")
+crimes <- read.csv("data/Crimes.csv")
+```
+
+Data Cleaning and Processing
+
+```{r}
+# Merging the covid by zip codes and the community area together
+
+## Convert ZIP.Code to character in both datasets
+covid$ZIP.Code <- as.character(covid$ZIP.Code)
+commu_zip$ZIP.Code <- as.character(commu_zip$ZIP.Code)
+
+# Left join covid and commu_zip 
+covid_data <- covid %>%
+  left_join(commu_zip, by = "ZIP.Code")
+
+# Convert Week.Start to Date format
+covid_data$Week.Start <- as.Date(covid_data$Week.Start, format = "%m/%d/%Y")
+
+# Extract the Year
+covid_data$Year <- as.numeric(format(covid_data$Week.Start, "%Y"))
+
+# Extract the Week Number (0 = Sunday, 1 = Monday start)
+covid_data$Week.Number <- as.numeric(format(covid_data$Week.Start, "%U"))
+
+# Remove the specified columns from the covid dataset
+covid_data_zip <- covid_data %>%
+  select(-ZIP.Code.Location, -Row.ID)
+
+# Check the result
+head(covid_data_zip)
+
+```
+
+```{r}
+# Convert Date to Date format
+crimes$Date <- as.Date(crimes$Date, format = "%m/%d/%Y")
+
+# Extract the Year
+crimes$Year <- as.numeric(format(crimes$Date, "%Y"))
+
+# Extract the Week Number (0 = Sunday, 1 = Monday start)
+crimes$Week.Number <- as.numeric(format(crimes$Date, "%U"))
+
+# Remove the specified columns from the crime dataset
+crimes_data <- crimes %>%
+  select(-District, -Ward, -FBI.Code, -X.Coordinate, -Y.Coordinate, 
+         -Updated.On, -Latitude, -Longitude, -Location, -IUCR, 
+         -Block, -Location.Description)
+
+# Check the first few rows of the cleaned dataset
+head(crimes_data)
+```
+
+```{r}
+# Filter the covid_data_zip for years 2020 to 2022
+covid_20 <- covid_data_zip %>%
+  filter(Year >= 2020 & Year <= 2022)
+
+# Filter the Crime data for years 2020 to 2022
+crime_20 <- crimes_data %>%
+  filter(Year >= 2020 & Year <= 2022)
+```
+
+```{r}
+# Group by Year, Week.Number, Primary.Type, and Community.Area, then count the crimes
+crime_week <- crime_20%>%
+  group_by(Year, Week.Number, Primary.Type, Community.Area) %>%
+  summarise(Crime.Count = n(), .groups = "drop")  # Count crimes and drop the grouping afterwards
+
+# View the first few rows of the result
+head(crime_week)
+
+```
+
+```{r}
+# Convert the Community.Area and the Week.Number as the same type
+crime_week$Community.Area <- as.integer(crime_week$Community.Area)
+covid_20$Community.Area <- as.integer(covid_20$Community.Area)
+
+crime_week$Week.Number <- as.integer(crime_week$Week.Number)
+covid_20$Week.Number <- as.integer(covid_20$Week.Number)
+
+# Join the cleaned covid and crimes data together
+final <- crime_week %>%
+  left_join(covid_20, by = c("Community.Area", "Week.Number")) %>% 
+  select(-Year.x) %>% 
+  rename(c("Year" = "Year.y"))
+
+final <- na.omit(final)
+# View the first few rows of the merged data
+head(final)
+str(final)
+```
+
+```{r}
+# For crime data for year 2019 (as the basline)
+cri_data <- read.csv("data/CRIMES.csv")
+
+# Convert Date column to Date format
+cri_data$Date <- as.Date(cri_data$Date, format = "%m/%d/%Y")
+
+# Extract the Year from the Date column
+cri_data$Year <- as.numeric(format(cri_data$Date, "%Y"))
+
+# Extract the Week Number (0 = Sunday, 1 = Monday start)
+cri_data$Week.Number <- as.numeric(format(cri_data$Date, "%U"))
+
+# Remove the specified columns from the crime dataset
+cri_data19 <- cri_data %>%
+  select(-District, -Ward, -FBI.Code, -X.Coordinate, -Y.Coordinate, 
+         -Updated.On, -Latitude, -Longitude, -Location, -IUCR, 
+         -Block, -Location.Description)
+
+# Group by Year, Week.Number, Primary.Type, and Community.Area, then count the crimes
+crime_19 <- cri_data19 %>%
+  group_by(Year, Week.Number, Primary.Type, Community.Area) %>%
+  summarise(Crime.Count = n(), .groups = "drop")  # Count crimes and drop the grouping afterwards
+
+# View the first few rows of the result
+head(crime_19)
+str(crime_19)
+```
+
+### Data Visualization (using ggplot and plotly)
+
+-   Is there a correlation between COVID-19 cases rate and the crime rates?
+
+```{r, fig.height=12, fig.width=12}
+# Load necessary libraries
+library(ggplot2)
+library(ggcorrplot)
+
+ggplot(final, aes(x = Week.Start)) +
+  geom_line(aes(y = Crime.Count, color = "Crime Count"), size = 1) +
+  geom_line(aes(y = Case.Rate...Weekly, color = "COVID-19 Case Rate"), size = 1) +
+  labs(title = "Trends in Crime Counts and COVID-19 Case Rates Over Time",
+       x = "Week",
+       y = "Count/Rate") +
+  scale_color_manual(values = c("Crime Count" = "blue", "COVID-19 Case Rate" = "red")) +
+  theme_minimal() +
+  theme(legend.title = element_blank(),
+    axis.title.x = element_text(size = 16),   
+    axis.title.y = element_text(size = 16),  
+    axis.text.x = element_text(size = 14),  
+    axis.text.y = element_text(size = 14),   
+    legend.text = element_text(size = 14),    
+    legend.key.size = unit(1.5, "lines"),
+    plot.title = element_text(size = 18))
+```
+
+```{r, fig.height=6, fig.width=12}
+# Reshape the data to have one column for values and one for the variable type
+final_long <- final %>%
+  pivot_longer(cols = c(Crime.Count, Case.Rate...Weekly), 
+               names_to = "variable", 
+               values_to = "value")
+
+# Plot with faceting
+ggplot(final_long, aes(x = Week.Start, y = value, color = variable)) +
+  geom_line(size = 1) +
+  facet_wrap(~ variable, scales = "free_y", 
+             labeller = labeller(variable = c("Crime.Count" = "Crime Count", 
+                                              "Case.Rate...Weekly" = "COVID-19 Case Rate"))) +
+  labs(title = "Trends in Crime Counts and COVID-19 Case Rates Over Time",
+       x = "Week",
+       y = "Value",
+       color = "Legend") +
+  scale_color_manual(values = c("Crime.Count" = "blue", "Case.Rate...Weekly" = "red")) +
+  theme_minimal() +
+  theme(
+    legend.title = element_blank(),
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 12),
+    legend.key.size = unit(1.5, "lines"),
+    plot.title = element_text(size = 16)
+  )
+
+```
+
+-   Did certain areas experience more severe COVID-19 impacts (in terms of positivity rate and deaths)??
+
+```{r, fig.height=8, fig.width=20}
+final$Percent.Tested.Positive...Weekly <- as.numeric(final$Percent.Tested.Positive...Weekly)
+final$Deaths...Weekly <- as.numeric(final$Deaths...Weekly)
+
+# Group by Community Area and calculate mean positivity rate and deaths
+community_summary <- final %>%
+  group_by(Community.Area, Community.Name) %>%
+  summarise(
+    avg_pos_rate = mean(Percent.Tested.Positive...Weekly, na.rm = TRUE),
+    avg_deaths = mean(Deaths...Weekly, na.rm = TRUE)
+  )
+
+print(community_summary) 
+
+# Visualize the average positivity rate across communities
+ggplot(community_summary, aes(x = Community.Area, y = avg_pos_rate, fill = Community.Name)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Average Weekly COVID-19 Positivity Rate by Community Area",
+       x = "Community Area", y = "Average Positivity Rate (%)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(
+    legend.title = element_blank(),
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 12),
+    legend.key.size = unit(1.5, "lines"),
+    plot.title = element_text(size = 16)
+  )
+
+
+# Visualize the average deaths across communities
+ggplot(community_summary, aes(x = Community.Area, y = avg_deaths, fill = Community.Name)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Average Weekly Deaths by Community Area",
+       x = "Community Area", y = "Average Deaths") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(
+    legend.title = element_blank(),
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 12),
+    legend.key.size = unit(1.5, "lines"),
+    plot.title = element_text(size = 16)
+  )
+
+```
+
+-   How did crime rates vary by community area during the COVID-19 period?
+
+```{r, fig.height=8, fig.width=22}
+# Load required library
+library(RColorBrewer)
+
+# Create a color palette with a larger range
+community_colors <- colorRampPalette(brewer.pal(12, "Paired"))(77)
+
+# Summarize crime rates by community area
+crime_by_commu <- final %>%
+  group_by(Community.Area, Community.Name) %>%
+  summarise(total_crime_count = sum(Crime.Count, na.rm = TRUE))
+crime_by_commu %>% arrange(total_crime_count)
+# Visualize the crime rates across community areas
+ggplot(crime_by_commu, aes(x = Community.Area, y = total_crime_count, fill = Community.Name)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = community_colors) +
+  labs(
+    title = "Crime Rates by Community Area (2020-2022)",
+    x = "Community Area",
+    y = "Total Crime Count"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(
+    legend.title = element_blank(),
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 12),
+    legend.key.size = unit(1.5, "lines"),
+    plot.title = element_text(size = 16)
+  )
+
+```
+
+-   How did weekly testing and positivity rates compare across different years (2020 - 2022)?
+
+```{r}
+
+library(RColorBrewer)
+
+# Summarize data by year
+yearly_data <- final %>%
+  group_by(Year) %>%
+  summarise(
+    total_tests_weekly = sum(Tests...Weekly, na.rm = TRUE),
+    positive_rate_weekly = mean(Percent.Tested.Positive...Weekly, na.rm = TRUE),
+    total_cases_weekly = sum(Cases...Weekly, na.rm = TRUE),
+    total_deaths_weekly = sum(Deaths...Weekly, na.rm = TRUE)
+  )
+yearly_data 
+# Create a color palette
+year_colors <- brewer.pal(3, "Set2") # Adjust based on the number of years
+
+# Violin plot for weekly testing counts
+ggplot(final, aes(x = as.factor(Year), y = Tests...Weekly, fill = as.factor(Year))) +
+  geom_violin() +
+  scale_fill_manual(values = year_colors, name = "Year") +
+  labs(
+    title = "Distribution of Weekly Testing Counts by Year",
+    x = "Year",
+    y = "Total Tests (Weekly)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 12),
+    legend.key.size = unit(1.5, "lines"),
+    plot.title = element_text(size = 16)
+  )
+
+# Violin plot for positivity rates
+ggplot(final, aes(x = as.factor(Year), y = Percent.Tested.Positive...Weekly, fill = as.factor(Year))) +
+  geom_violin() +
+  scale_fill_manual(values = year_colors, name = "Year") +
+  labs(
+    title = "Distribution of Positivity Rates by Year",
+    x = "Year",
+    y = "Positivity Rate (%)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 12),
+    legend.key.size = unit(1.5, "lines"),
+    plot.title = element_text(size = 16)
+  )
+```
+
+```{r, fig.height=4, fig.width=9}
+# Facet wrap for comparison
+ggplot(final, aes(x = Week.Start, y = Tests...Weekly, color = as.factor(Year))) +
+  geom_line() +
+  facet_wrap(~ Year, scales = "free") +
+  scale_color_manual(values = year_colors, name = "Year") +
+  labs(
+    title = "Weekly Testing Counts Comparison Across Years",
+    x = "Week",
+    y = "Total Tests (Weekly)"
+  ) +
+  theme_minimal()
+
+ggplot(final, aes(x = Week.Start, y = Percent.Tested.Positive...Weekly, color = as.factor(Year))) +
+  geom_line() +
+  facet_wrap(~ Year, scales = "free") +
+  scale_color_manual(values = year_colors, name = "Year") +
+  labs(
+    title = "Weekly Positivity Rates Comparison Across Years",
+    x = "Week",
+    y = "Positivity Rate (%)"
+  ) +
+  theme_minimal()
+
+```
+
+-   How did testing rates correlate with COVID-19 case rates across zip codes?
+
+```{r}
+# Load required libraries
+library(dplyr)
+library(ggplot2)
+library(GGally) # For scatterplot matrix
+library(reshape2) # For heatmap
+
+# Aggregating data by ZIP code
+zip_code_summary <- final %>%
+  group_by(ZIP.Code) %>%
+  summarise(
+    avg_tests_weekly = mean(Tests...Weekly, na.rm = TRUE),
+    avg_cases_weekly = mean(Cases...Weekly, na.rm = TRUE)
+  )
+
+# Scatterplot matrix
+ggpairs(zip_code_summary, columns = c("avg_tests_weekly", "avg_cases_weekly"), 
+        title = "Scatterplot Matrix of Testing and Case Rates by Zip Code")
+
+# Correlation matrix
+cor_matrix <- cor(zip_code_summary %>% select(avg_tests_weekly, avg_cases_weekly), method = "pearson")
+cor_matrix
+```
+
+-   How did crime rates change from 2019 to 2020-2022 (COVID-19 era)?
+
+```{r, fig.height=12, fig.width=24}
+# Load required libraries
+library(dplyr)
+library(ggplot2)
+
+# 1. Data Preparation
+
+# For 2019 data
+crime_2019_data <- crime_19 %>%
+  filter(Year == 2019) %>%
+  group_by(Community.Area) %>%
+  summarise(total_crime_count_2019 = sum(Crime.Count, na.rm = TRUE), .groups = "drop")
+
+# For 2020-2022 data
+crime_dataset <- final %>%
+  filter(Year %in% c(2020, 2021, 2022)) %>%
+  group_by(Community.Area) %>%
+  summarise(total_crime_count_2020_2022 = sum(Crime.Count, na.rm = TRUE), .groups = "drop")
+
+# Merge the summaries
+crime_change <- left_join(crime_2019_data, crime_dataset, by = "Community.Area")
+
+# Calculate percentage change
+crime_change <- crime_change %>%
+  mutate(percentage_change = (total_crime_count_2020_2022 - total_crime_count_2019) / total_crime_count_2019 * 100)
+
+# 2. Visualization for each year
+
+# Plot for 2019 with coloring by Community Area
+p_2019 <- ggplot(crime_change, aes(x = Community.Area, y = total_crime_count_2019, fill = Community.Area)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Crime Rates in 2019 by Community Area",
+    x = "Community Area", 
+    y = "Total Crime Count"
+  ) + theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 12),
+    legend.key.size = unit(1.5, "lines"),
+    plot.title = element_text(size = 16)
+  )
+
+# Display the plot for 2019
+print(p_2019)
+
+# Plot for 2020-2022 with coloring by Community Area
+p_2020_2022 <- ggplot(crime_change, aes(x = Community.Area, y = total_crime_count_2020_2022, fill = Community.Area)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Crime Rates from 2020 to 2022 by Community Area",
+    x = "Community Area", 
+    y = "Total Crime Count"
+  ) + theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 12),
+    legend.key.size = unit(1.5, "lines"),
+    plot.title = element_text(size = 16)
+  )
+
+# Display the plot for 2020-2022
+print(p_2020_2022)
+
+crime_change
+```
+
+-   Did certain areas experience more severe COVID-19 impacts (in terms of positivity rate and deaths)?
+
+    ```{r, fig.height=12, fig.width=24}
+    # Load required libraries
+    library(dplyr)
+    library(ggplot2)
+
+    # Data Preparation
+    # Aggregating the data
+    finally <- final %>%
+      filter(!is.na(Community.Name)) %>%
+      group_by(Community.Name, Year) %>%
+      summarise(
+        positivity_rate = mean(Percent.Tested.Positive...Weekly, na.rm = TRUE),
+        death_count = sum(Deaths...Weekly, na.rm = TRUE)
+      )
+
+    # Visualization
+    # Boxplot for Positivity Rate
+    ggplot(finally, aes(x = Year, y = positivity_rate, fill = Community.Name)) +
+      geom_boxplot() +
+      labs(
+        title = "COVID-19 Positivity Rate by Community Area and Year",
+        x = "Year",
+        y = "Positivity Rate (%)"
+      ) +
+      theme_minimal() +
+      theme(
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        legend.key.size = unit(1.5, "lines"),
+        plot.title = element_text(size = 16)
+        )
+
+
+    # Boxplot for Death Counts
+    ggplot(finally, aes(x = Year, y = death_count, fill = Community.Name)) +
+      geom_boxplot() +
+      labs(
+        title = "COVID-19 Death Counts by Community Area and Year",
+        x = "Year",
+        y = "Death Counts"
+      ) + 
+      theme_minimal() +
+      theme(
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        legend.key.size = unit(1.5, "lines"),
+        plot.title = element_text(size = 16)
+        )
+    finally
+    finally %>% arrange(Year)
+    ```
